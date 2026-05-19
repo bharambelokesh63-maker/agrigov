@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
-import { Satellite, MapPin, CheckCircle2, AlertTriangle, Search, ZoomIn, ZoomOut, Maximize2, ExternalLink, Eye, Layers, Filter, RefreshCw } from "lucide-react";
+import { Satellite, MapPin, CheckCircle2, AlertTriangle, Search, ExternalLink, Eye, Layers, Filter, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "./dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MapContainer, TileLayer, CircleMarker, Polygon, Tooltip as LTooltip, useMap } from "react-leaflet";
+import { MAHARASHTRA_DISTRICTS_GEO, MAHARASHTRA_STATE_BOUNDARY, CROP_SUITABILITY_ZONES } from "@/lib/maharashtra-geo";
+import "leaflet/dist/leaflet.css";
 
 export const Route = createFileRoute("/_app/field-verification")({ component: FieldVerificationPage });
 
@@ -26,16 +29,7 @@ const REGIONAL_CROPS: Record<string, string[]> = {
   Ratnagiri: ["Rice","Mango","Cashew"], Sindhudurg: ["Rice","Cashew","Coconut"],
 };
 
-const DISTRICTS: { name: string; x: number; y: number }[] = [
-  { name: "Mumbai", x: 72.87, y: 19.07 }, { name: "Pune", x: 73.85, y: 18.52 },
-  { name: "Nashik", x: 73.78, y: 20.0 }, { name: "Nagpur", x: 79.08, y: 21.14 },
-  { name: "Aurangabad", x: 75.34, y: 19.87 }, { name: "Solapur", x: 75.92, y: 17.67 },
-  { name: "Kolhapur", x: 74.23, y: 16.69 }, { name: "Satara", x: 74.0, y: 17.68 },
-  { name: "Sangli", x: 74.56, y: 16.85 }, { name: "Latur", x: 76.56, y: 18.4 },
-  { name: "Beed", x: 75.76, y: 18.99 }, { name: "Jalgaon", x: 75.56, y: 21.0 },
-  { name: "Ahmednagar", x: 74.75, y: 19.09 }, { name: "Wardha", x: 78.6, y: 20.74 },
-  { name: "Amravati", x: 77.77, y: 20.93 }, { name: "Ratnagiri", x: 73.3, y: 16.99 },
-];
+
 
 function verify(row: Row) {
   const district = row.profile?.district ?? "";
@@ -55,7 +49,6 @@ function FieldVerificationPage() {
   const [search, setSearch] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("all");
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -143,40 +136,63 @@ function FieldVerificationPage() {
         <span className="text-[11px] text-muted-foreground">{filtered.length} results</span>
       </div>
 
-      {/* Map */}
-      <Card title="Maharashtra District Map — Click to filter">
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
-          <div className="absolute right-3 top-3 z-10 flex flex-col gap-1">
-            <button onClick={() => setZoom(z => Math.min(z + 0.3, 3))} className="flex h-7 w-7 items-center justify-center rounded-lg bg-card border border-border shadow text-xs hover:bg-secondary"><ZoomIn className="h-3.5 w-3.5" /></button>
-            <button onClick={() => setZoom(z => Math.max(z - 0.3, 0.5))} className="flex h-7 w-7 items-center justify-center rounded-lg bg-card border border-border shadow text-xs hover:bg-secondary"><ZoomOut className="h-3.5 w-3.5" /></button>
-            <button onClick={() => setZoom(1)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-card border border-border shadow text-xs hover:bg-secondary"><Maximize2 className="h-3.5 w-3.5" /></button>
-          </div>
-          <div className="relative h-[380px] w-full" style={{ transform: `scale(${zoom})`, transformOrigin: "center", transition: "transform 0.3s ease" }}>
-            <svg viewBox="71.5 15.5 10 7" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid meet">
-              <path d="M72.7,20.7 L73,19.5 L73.5,18.5 L74,17.5 L74.5,16.5 L75,16.2 L76,16.5 L77,17 L78,17.5 L79,18 L80,18.5 L80.5,19 L80.7,20 L80.5,21 L80,21.5 L79.5,22 L78.5,22 L77.5,21.8 L76.5,21.5 L75.5,21.5 L74.5,21.2 L73.5,21 L73,20.8 Z"
-                fill="none" stroke="var(--primary)" strokeWidth="0.05" strokeDasharray="0.1 0.05" opacity="0.4" />
-              {DISTRICTS.map(d => {
-                const count = districtCounts[d.name];
-                const hasApps = count && count.total > 0;
-                const isSelected = selectedDistrict === d.name;
-                const mismatchRate = count ? count.mismatch / count.total : 0;
-                const fillColor = !hasApps ? "var(--muted)" : mismatchRate > 0.5 ? "var(--destructive)" : mismatchRate > 0.2 ? "var(--warning)" : "var(--success)";
-                return (
-                  <g key={d.name} onClick={() => setSelectedDistrict(isSelected ? "all" : d.name)} className="cursor-pointer">
-                    <circle cx={d.x} cy={d.y} r={hasApps ? 0.12 + Math.min(count!.total * 0.015, 0.15) : 0.08}
-                      fill={fillColor} fillOpacity={isSelected ? 0.9 : 0.5} stroke={isSelected ? "var(--primary)" : "none"} strokeWidth="0.03" />
-                    {hasApps && <text x={d.x} y={d.y + 0.025} textAnchor="middle" fontSize="0.07" fill="white" fontWeight="bold">{count!.total}</text>}
-                    <text x={d.x} y={d.y + (hasApps ? 0.24 : 0.18)} textAnchor="middle" fontSize="0.06" fill="var(--foreground)" fontWeight="600">{d.name}</text>
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-          <div className="absolute bottom-3 left-3 flex items-center gap-3 rounded-lg bg-card/90 backdrop-blur border border-border px-3 py-1.5 text-[10px]">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> Verified</span>
+      {/* Real GIS Map */}
+      <Card title="Maharashtra Satellite Verification Map — Click district to filter">
+        <div className="rounded-xl overflow-hidden border border-border" style={{ height: 400 }}>
+          <MapContainer center={[19.5, 76.5]} zoom={7} style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom={true} zoomControl={true}>
+            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution="&copy; Esri" />
+            <Polygon positions={MAHARASHTRA_STATE_BOUNDARY} pathOptions={{ color: "#a5b4fc", weight: 2, fillOpacity: 0, dashArray: "8,4" }} />
+            {MAHARASHTRA_DISTRICTS_GEO.map(d => {
+              const count = districtCounts[d.name];
+              const hasApps = count && count.total > 0;
+              const isSelected = selectedDistrict === d.name;
+              const mismatchRate = count ? count.mismatch / count.total : 0;
+              const fillColor = !hasApps ? "rgba(100,116,139,0.1)" : mismatchRate > 0.5 ? "rgba(239,68,68,0.6)" : mismatchRate > 0.2 ? "rgba(249,115,22,0.5)" : "rgba(34,197,94,0.5)";
+              return (
+                <Polygon key={d.name} positions={d.boundary}
+                  pathOptions={{ color: isSelected ? "#818cf8" : "#94a3b8", weight: isSelected ? 3 : 1, fillColor, fillOpacity: 0.7 }}
+                  eventHandlers={{ click: () => setSelectedDistrict(isSelected ? "all" : d.name) }}>
+                  <LTooltip direction="top" sticky>
+                    <div style={{ fontSize: 11 }}>
+                      <strong>{d.name}</strong>
+                      {hasApps ? (
+                        <div>Total: {count.total} · ✓ {count.valid} · ⚠ {count.mismatch}</div>
+                      ) : <div>No applications</div>}
+                    </div>
+                  </LTooltip>
+                </Polygon>
+              );
+            })}
+            {MAHARASHTRA_DISTRICTS_GEO.map(d => {
+              const count = districtCounts[d.name];
+              if (!count || count.total === 0) return null;
+              const mismatchRate = count.mismatch / count.total;
+              return (
+                <CircleMarker key={`m-${d.name}`} center={d.center}
+                  radius={Math.max(6, Math.min(count.total * 1.5, 20))}
+                  pathOptions={{
+                    color: mismatchRate > 0.5 ? "#ef4444" : mismatchRate > 0.2 ? "#f59e0b" : "#22c55e",
+                    fillColor: mismatchRate > 0.5 ? "#ef4444" : mismatchRate > 0.2 ? "#f59e0b" : "#22c55e",
+                    fillOpacity: 0.85, weight: 2,
+                  }}
+                  eventHandlers={{ click: () => setSelectedDistrict(d.name) }}>
+                  <LTooltip permanent direction="center">
+                    <span style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{count.total}</span>
+                  </LTooltip>
+                </CircleMarker>
+              );
+            })}
+          </MapContainer>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> AI Verified</span>
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> Caution</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" /> High Risk</span>
-          </div>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" /> High Mismatch</span>
+          </span>
+          <span>Satellite view · Real-time NDVI analysis</span>
         </div>
       </Card>
 

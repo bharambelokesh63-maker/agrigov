@@ -1,13 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { FileText, ShieldAlert, AlertTriangle, Flame, Clock, ArrowRight, Activity, CheckCircle2, MapPin, Filter, RefreshCw, Users, Trash2 } from "lucide-react";
+import { FileText, ShieldAlert, AlertTriangle, Flame, Clock, ArrowRight, Activity, CheckCircle2, MapPin, Filter, RefreshCw, Users, Trash2, Globe } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { MAHARASHTRA_DISTRICT_LIST, getTalukas } from "@/lib/maharashtra";
+import { MapContainer, TileLayer, CircleMarker, Polygon, Tooltip as LTooltip, useMap } from "react-leaflet";
+import { MAHARASHTRA_DISTRICTS_GEO, MAHARASHTRA_STATE_BOUNDARY } from "@/lib/maharashtra-geo";
+import "leaflet/dist/leaflet.css";
 
 export const Route = createFileRoute("/_app/dashboard")({ component: Dashboard });
 
@@ -199,28 +202,53 @@ function Dashboard() {
 
       {/* District Heat Map + Scheme Demand */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title={t("admin.district_heat")}>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {heatData.map(d => {
-              const intensity = Math.min(d.total / Math.max(...heatData.map(h => h.total), 1), 1);
-              const fraudRate = d.fraud / Math.max(d.total, 1);
-              return (
-                <button key={d.name} onClick={() => { setDistrictFilter(d.name); setTalukaFilter("all"); }}
-                  className={`rounded-lg border p-3 text-left transition hover:shadow-md ${districtFilter === d.name ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-card"}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />{d.name}</span>
-                    <span className="text-lg font-bold text-foreground">{d.total}</span>
-                  </div>
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full rounded-full" style={{ width: `${intensity * 100}%`, background: fraudRate > 0.2 ? "var(--destructive)" : fraudRate > 0.1 ? "var(--warning)" : "var(--primary)" }} />
-                  </div>
-                  <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground">
-                    <span>{d.pending} pending</span>
-                    <span className={fraudRate > 0.1 ? "text-destructive font-semibold" : ""}>{d.fraud} flagged</span>
-                  </div>
-                </button>
-              );
-            })}
+        <Card title={t("admin.district_heat")} action={<Link to="/gis" className="text-xs font-medium text-primary hover:underline flex items-center gap-1"><Globe className="h-3 w-3" /> Full GIS Map</Link>}>
+          <div className="rounded-xl overflow-hidden border border-border" style={{ height: 320 }}>
+            <MapContainer center={[19.5, 76.5]} zoom={6} style={{ height: "100%", width: "100%" }}
+              scrollWheelZoom={false} zoomControl={false} dragging={false} attributionControl={false}>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <Polygon positions={MAHARASHTRA_STATE_BOUNDARY} pathOptions={{ color: "#6366f1", weight: 2, fillOpacity: 0, dashArray: "8,4" }} />
+              {MAHARASHTRA_DISTRICTS_GEO.map(d => {
+                const stats = districtHeat[d.name];
+                const hasApps = stats && stats.total > 0;
+                const fraudRate = hasApps ? stats.fraud / stats.total : 0;
+                const fillColor = !hasApps ? "rgba(100,116,139,0.1)" : fraudRate > 0.2 ? "rgba(239,68,68,0.6)" : fraudRate > 0.1 ? "rgba(249,115,22,0.5)" : `rgba(34,197,94,${0.2 + Math.min(stats.total / 15, 0.6)})`;
+                const isSelected = districtFilter === d.name;
+                return (
+                  <Polygon key={d.name} positions={d.boundary}
+                    pathOptions={{ color: isSelected ? "#6366f1" : "#475569", weight: isSelected ? 3 : 1, fillColor, fillOpacity: 0.8 }}
+                    eventHandlers={{ click: () => { setDistrictFilter(isSelected ? "all" : d.name); setTalukaFilter("all"); } }}>
+                    <LTooltip direction="top" sticky>
+                      <div style={{ fontSize: 11 }}>
+                        <strong>{d.name}</strong>
+                        {hasApps ? <div>Apps: {stats.total} · Fraud: {stats.fraud} · Pending: {stats.pending}</div> : <div>No data</div>}
+                      </div>
+                    </LTooltip>
+                  </Polygon>
+                );
+              })}
+              {MAHARASHTRA_DISTRICTS_GEO.map(d => {
+                const stats = districtHeat[d.name];
+                if (!stats || stats.total === 0) return null;
+                return (
+                  <CircleMarker key={`m-${d.name}`} center={d.center}
+                    radius={Math.max(5, Math.min(stats.total * 1.2, 18))}
+                    pathOptions={{ color: "#6366f1", fillColor: "#818cf8", fillOpacity: 0.85, weight: 1.5 }}>
+                    <LTooltip permanent direction="center">
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>{stats.total}</span>
+                    </LTooltip>
+                  </CircleMarker>
+                );
+              })}
+            </MapContainer>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> Normal</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> Caution</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" /> High Risk</span>
+            </span>
+            <span>Click district to filter</span>
           </div>
         </Card>
 

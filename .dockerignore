@@ -11,4 +11,8 @@ dist
 build-output*.txt
 .DS_Store
 .vscode
+.wrangler
+.tanstack
+bun.lockb
+bunfig.toml
 *.log

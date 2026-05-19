@@ -22,6 +22,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSchemesRouteImport } from './routes/_app/schemes'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppGrievancesRouteImport } from './routes/_app/grievances'
+import { Route as AppGisRouteImport } from './routes/_app/gis'
 import { Route as AppFraudRouteImport } from './routes/_app/fraud'
 import { Route as AppFieldVerificationRouteImport } from './routes/_app/field-verification'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
@@ -92,6 +93,11 @@ const AppGrievancesRoute = AppGrievancesRouteImport.update({
   path: '/grievances',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGisRoute = AppGisRouteImport.update({
+  id: '/gis',
+  path: '/gis',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppFraudRoute = AppFraudRouteImport.update({
   id: '/fraud',
   path: '/fraud',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/field-verification': typeof AppFieldVerificationRoute
   '/fraud': typeof AppFraudRoute
+  '/gis': typeof AppGisRoute
   '/grievances': typeof AppGrievancesRoute
   '/reports': typeof AppReportsRoute
   '/schemes': typeof AppSchemesRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/field-verification': typeof AppFieldVerificationRoute
   '/fraud': typeof AppFraudRoute
+  '/gis': typeof AppGisRoute
   '/grievances': typeof AppGrievancesRoute
   '/reports': typeof AppReportsRoute
   '/schemes': typeof AppSchemesRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/field-verification': typeof AppFieldVerificationRoute
   '/_app/fraud': typeof AppFraudRoute
+  '/_app/gis': typeof AppGisRoute
   '/_app/grievances': typeof AppGrievancesRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/schemes': typeof AppSchemesRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/field-verification'
     | '/fraud'
+    | '/gis'
     | '/grievances'
     | '/reports'
     | '/schemes'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/field-verification'
     | '/fraud'
+    | '/gis'
     | '/grievances'
     | '/reports'
     | '/schemes'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/field-verification'
     | '/_app/fraud'
+    | '/_app/gis'
     | '/_app/grievances'
     | '/_app/reports'
     | '/_app/schemes'
@@ -336,6 +348,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrievancesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/gis': {
+      id: '/_app/gis'
+      path: '/gis'
+      fullPath: '/gis'
+      preLoaderRoute: typeof AppGisRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/fraud': {
       id: '/_app/fraud'
       path: '/fraud'
@@ -380,6 +399,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppFieldVerificationRoute: typeof AppFieldVerificationRoute
   AppFraudRoute: typeof AppFraudRoute
+  AppGisRoute: typeof AppGisRoute
   AppGrievancesRoute: typeof AppGrievancesRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSchemesRoute: typeof AppSchemesRoute
@@ -392,6 +412,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppFieldVerificationRoute: AppFieldVerificationRoute,
   AppFraudRoute: AppFraudRoute,
+  AppGisRoute: AppGisRoute,
   AppGrievancesRoute: AppGrievancesRoute,
   AppReportsRoute: AppReportsRoute,
   AppSchemesRoute: AppSchemesRoute,
